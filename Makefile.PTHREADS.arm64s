@@ -1,0 +1,69 @@
+# Makefile August 2006 by Alexandros Stamatakis
+# Makefile cleanup October 2006, Courtesy of Peter Cordes <peter@cordes.ca>
+# Modified for Apple Silicon and clang compatibility with additional safety flags by HVM using Claude Sonnet 20250218
+
+# Detect OS type
+UNAME_S := $(shell uname -s)
+ARCH := $(shell uname -m)
+
+# Set compiler based on OS
+ifeq ($(UNAME_S),Darwin)
+CC = clang
+else
+CC = gcc
+endif
+
+# Architecture-specific flags
+ifeq ($(ARCH), x86_64)
+ARCH_CFLAGS=-msse
+else ifeq ($(ARCH), arm64)  # Changed from aarch64 for Mac compatibility
+ARCH_CFLAGS=-mcpu=apple-m1 -mtune=native
+endif
+
+# Base CFLAGS with additional safety flags
+BASE_CFLAGS = -D_GNU_SOURCE \
+              -O2 \
+              -D_USE_PTHREADS \
+              -fno-strict-aliasing \
+              -fno-common \
+              -fstack-protector-strong \
+              -ftrivial-auto-var-init=zero \
+              -g  # Add debug symbols
+
+# Mac-specific adjustments
+ifeq ($(UNAME_S),Darwin)
+LIBRARIES = -lm -pthread
+# Add sanitizer flags for debugging - uncomment when debugging
+#SANITIZE = -fsanitize=address -fsanitize=undefined
+else
+LIBRARIES = -lm -pthread
+endif
+
+# Combined CFLAGS
+CFLAGS = $(BASE_CFLAGS) $(ARCH_CFLAGS) $(SANITIZE)
+
+# Warning flags - enabled by default for better error detection
+WARN_FLAGS = -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare
+
+# Final CFLAGS combination
+CFLAGS += $(WARN_FLAGS)
+
+RM = rm -f
+
+objs    = axml.o optimizeModel.o multiple.o searchAlgo.o topologies.o parsePartitions.o treeIO.o models.o bipartitionList.o rapidBootstrap.o evaluatePartialGenericSpecial.o evaluateGenericSpecial.o newviewGenericSpecial.o makenewzGenericSpecial.o classify.o fastDNAparsimony.o fastSearch.o leaveDropping.o rmqs.o rogueEPA.o ancestralStates.o mem_alloc.o eigen.o
+
+all : clean raxmlHPC-PTHREADS
+
+GLOBAL_DEPS = axml.h globalVariables.h rmq.h rmqs.h
+
+raxmlHPC-PTHREADS : $(objs)
+	$(CC) -o raxmlHPC-PTHREADS $(objs) $(LIBRARIES) $(LDFLAGS) $(SANITIZE)
+
+# Generic rule for object files
+%.o : %.c $(GLOBAL_DEPS)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+clean :
+	$(RM) *.o raxmlHPC-PTHREADS
+
+dev : raxmlHPC-PTHREADS
